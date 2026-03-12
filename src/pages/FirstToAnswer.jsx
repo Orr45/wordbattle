@@ -1,19 +1,29 @@
 import { useState, useEffect, useRef } from 'react'
 import { buildOptions } from '../lib/words'
-import { advanceQuestion, finishRoom } from '../lib/rooms'
+import { advanceQuestion, finishRoom, updatePlayer } from '../lib/rooms'
 
-const QUESTION_TIME = 8 // seconds per question
+const QUESTION_TIME = 8
 
 export default function FirstToAnswer({ gameWords, room, me, players, onGameOver }) {
   const currentIndex = room.current_question ?? 0
   const currentWord = gameWords[currentIndex]
+
   const [options, setOptions] = useState([])
   const [selected, setSelected] = useState(null)
   const [timeLeft, setTimeLeft] = useState(QUESTION_TIME)
-  const [scores, setScores] = useState({}) // local score accumulation
+
   const timerRef = useRef(null)
   const advancedRef = useRef(false)
-  const prevIndexRef = useRef(currentIndex)
+  // Use refs to avoid stale closures inside setInterval
+  const currentIndexRef = useRef(currentIndex)
+  const gameWordsRef = useRef(gameWords)
+  const roomIdRef = useRef(room.id)
+  const meRef = useRef(me)
+  const scoreRef = useRef(0)
+  const answersRef = useRef([])
+
+  useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
+  useEffect(() => { meRef.current = me }, [me])
 
   // Rebuild options when question changes
   useEffect(() => {
@@ -23,43 +33,55 @@ export default function FirstToAnswer({ gameWords, room, me, players, onGameOver
     advancedRef.current = false
   }, [currentIndex])
 
-  // Sync timeLeft from question_started_at
+  // Timer — synced to question_started_at from Supabase
   useEffect(() => {
     if (!room.question_started_at) return
     clearInterval(timerRef.current)
 
+    const startedAt = new Date(room.question_started_at).getTime()
+
     const tick = () => {
-      const elapsed = (Date.now() - new Date(room.question_started_at).getTime()) / 1000
+      const elapsed = (Date.now() - startedAt) / 1000
       const left = Math.max(0, QUESTION_TIME - elapsed)
       setTimeLeft(parseFloat(left.toFixed(1)))
-      if (left <= 0 && !advancedRef.current && me.isHost) {
+
+      if (left <= 0 && !advancedRef.current && meRef.current?.isHost) {
         advancedRef.current = true
-        handleAdvance()
+        clearInterval(timerRef.current)
+        const next = currentIndexRef.current + 1
+        if (next >= gameWordsRef.current.length) {
+          finishRoom(roomIdRef.current).then(onGameOver)
+        } else {
+          advanceQuestion(roomIdRef.current, next)
+        }
       }
     }
+
     tick()
     timerRef.current = setInterval(tick, 100)
     return () => clearInterval(timerRef.current)
-  }, [room.question_started_at, currentIndex])
+  }, [room.question_started_at])
 
-  async function handleAdvance() {
-    clearInterval(timerRef.current)
-    const next = currentIndex + 1
-    if (next >= gameWords.length) {
-      await finishRoom(room.id)
-      onGameOver(scores)
-    } else {
-      await advanceQuestion(room.id, next)
-    }
-  }
-
-  function handleSelect(option) {
+  async function handleSelect(option) {
     if (selected) return
     const isCorrect = option.id === currentWord.id
     const pts = isCorrect ? 200 : -50
     setSelected({ option, correct: isCorrect })
-    setScores(prev => ({ ...prev, [me.id]: (prev[me.id] || 0) + pts }))
+
+    scoreRef.current += pts
+    const answer = { correct: isCorrect, points: pts, correct_word: currentWord, selected: option }
+    answersRef.current = [...answersRef.current, answer]
+
+    // Save to Supabase so leaderboard has the data
+    await updatePlayer(me.id, {
+      score: Math.max(0, scoreRef.current),
+      answers: answersRef.current,
+    })
   }
+
+  const timerPct = (timeLeft / QUESTION_TIME) * 100
+  const timerColor = timeLeft > 4 ? 'bg-green-500' : timeLeft > 2 ? 'bg-yellow-500' : 'bg-red-500'
+  const sortedPlayers = [...players].sort((a, b) => b.score - a.score)
 
   function getOptionClass(option) {
     const base = 'w-full py-4 px-5 rounded-2xl font-semibold text-lg transition-all duration-150 border-2 text-right '
@@ -68,11 +90,6 @@ export default function FirstToAnswer({ gameWords, room, me, players, onGameOver
     if (selected.option.id === option.id) return base + 'bg-red-500/20 border-red-500 text-red-300'
     return base + 'bg-white/5 border-white/5 opacity-30'
   }
-
-  const timerPct = (timeLeft / QUESTION_TIME) * 100
-  const timerColor = timeLeft > 4 ? 'bg-green-500' : timeLeft > 2 ? 'bg-yellow-500' : 'bg-red-500'
-
-  const sortedPlayers = [...players].sort((a, b) => b.score - a.score)
 
   if (!currentWord) return null
 
@@ -90,14 +107,11 @@ export default function FirstToAnswer({ gameWords, room, me, players, onGameOver
       {/* Timer bar */}
       <div className="max-w-lg mx-auto w-full mb-4">
         <div className="h-3 bg-white/10 rounded-full overflow-hidden">
-          <div
-            className={`h-full ${timerColor} rounded-full transition-all duration-100`}
-            style={{ width: `${timerPct}%` }}
-          />
+          <div className={`h-full ${timerColor} rounded-full transition-all duration-100`} style={{ width: `${timerPct}%` }} />
         </div>
       </div>
 
-      {/* Mini live scoreboard */}
+      {/* Live scores */}
       <div className="max-w-lg mx-auto w-full mb-4 flex gap-2 overflow-x-auto pb-1">
         {sortedPlayers.map((p, i) => (
           <div key={p.id} className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 ${p.id === me.id ? 'bg-purple-600/30 border border-purple-500/50' : 'bg-white/5 border border-white/10'}`}>
