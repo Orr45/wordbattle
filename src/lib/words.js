@@ -68,3 +68,35 @@ export function calcPoints(timeSeconds) {
   if (timeSeconds <= 10) return 110
   return 100
 }
+
+const STATS_KEY = 'wordbattle_stats'
+
+export function loadStats() {
+  try {
+    const data = localStorage.getItem(STATS_KEY)
+    return data ? JSON.parse(data) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function recordAnswer(wordId, correct) {
+  const stats = loadStats()
+  if (!stats[wordId]) stats[wordId] = { correct: 0, wrong: 0 }
+  if (correct) stats[wordId].correct++
+  else stats[wordId].wrong++
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats))
+}
+
+export function getWeakWords(words, count = 20) {
+  const stats = loadStats()
+  const scored = words.map(w => {
+    const s = stats[w.id] || { correct: 0, wrong: 0 }
+    const total = s.correct + s.wrong
+    const wrongRate = total === 0 ? 0 : s.wrong / total
+    return { ...w, wrongRate, total }
+  })
+  // Sort by wrong rate desc, then by total attempts desc (most practiced wrong first)
+  scored.sort((a, b) => b.wrongRate - a.wrongRate || b.total - a.total)
+  return scored.slice(0, count)
+}

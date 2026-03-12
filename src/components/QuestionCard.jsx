@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { buildOptions, calcPoints } from '../lib/words'
+import { buildOptions, calcPoints, recordAnswer } from '../lib/words'
 
 const TOTAL_TIME = 10 * 60 // 10 minutes
 
@@ -23,7 +23,7 @@ function GlobalTimer({ remaining }) {
   )
 }
 
-export default function QuestionCard({ words, allWords, questionIndex, totalQuestions, onAnswer, globalRemaining }) {
+export default function QuestionCard({ words, allWords, questionIndex, totalQuestions, onAnswer, globalRemaining, reverse = false }) {
   const [options, setOptions] = useState([])
   const [selected, setSelected] = useState(null)
   const [flash, setFlash] = useState(null) // 'correct' | 'wrong'
@@ -60,6 +60,8 @@ export default function QuestionCard({ words, allWords, questionIndex, totalQues
 
     setSelected(option.id)
     setFlash(isCorrect ? 'correct' : 'wrong')
+
+    recordAnswer(words.id, isCorrect)
 
     if (!isCorrect) {
       setShowCorrect(true)
@@ -116,8 +118,13 @@ export default function QuestionCard({ words, allWords, questionIndex, totalQues
       {/* Question */}
       <div className="max-w-lg mx-auto w-full flex-1 flex flex-col justify-center">
         <div className="text-center mb-10">
-          <p className="text-white/40 text-sm uppercase tracking-widest mb-3">Translate to Hebrew</p>
-          <h2 className="text-4xl font-bold text-white">{words.english}</h2>
+          <p className="text-white/40 text-sm uppercase tracking-widest mb-3">
+            {reverse ? 'תרגם לאנגלית' : 'תרגם לעברית'}
+          </p>
+          {reverse
+            ? <h2 className="text-4xl font-bold text-white" style={{ fontFamily: 'serif', direction: 'rtl' }}>{words.hebrew}</h2>
+            : <h2 className="text-4xl font-bold text-white">{words.english}</h2>
+          }
         </div>
 
         {/* Speed hint */}
@@ -134,18 +141,18 @@ export default function QuestionCard({ words, allWords, questionIndex, totalQues
               key={option.id}
               onClick={() => handleSelect(option)}
               className={getOptionClass(option)}
-              style={{ fontFamily: 'serif', direction: 'rtl' }}
+              style={reverse ? {} : { fontFamily: 'serif', direction: 'rtl' }}
             >
-              {option.hebrew}
+              {reverse ? option.english : option.hebrew}
             </button>
           ))}
         </div>
 
         {showCorrect && (
           <div className="mt-4 text-center animate-slide-up">
-            <p className="text-white/50 text-sm">Correct answer:</p>
-            <p className="text-green-300 text-xl font-bold mt-1" style={{ fontFamily: 'serif' }}>
-              {words.hebrew}
+            <p className="text-white/50 text-sm">התשובה הנכונה:</p>
+            <p className="text-green-300 text-xl font-bold mt-1" style={reverse ? {} : { fontFamily: 'serif' }}>
+              {reverse ? words.english : words.hebrew}
             </p>
           </div>
         )}
