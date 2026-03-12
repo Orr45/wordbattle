@@ -22,8 +22,30 @@ export default function FirstToAnswer({ gameWords, room, me, players, onGameOver
   const scoreRef = useRef(0)
   const answersRef = useRef([])
 
+  const onGameOverRef = useRef(onGameOver)
+  const playersRef = useRef(players)
+
   useEffect(() => { currentIndexRef.current = currentIndex }, [currentIndex])
   useEffect(() => { meRef.current = me }, [me])
+  useEffect(() => { onGameOverRef.current = onGameOver }, [onGameOver])
+  useEffect(() => { playersRef.current = players }, [players])
+
+  // Advance immediately when all players have answered the current question
+  useEffect(() => {
+    if (!me?.isHost) return
+    if (advancedRef.current) return
+    if (players.length === 0) return
+    const allAnswered = players.every(p => (p.answers?.length ?? 0) > currentIndex)
+    if (!allAnswered) return
+    advancedRef.current = true
+    clearInterval(timerRef.current)
+    const next = currentIndex + 1
+    if (next >= gameWords.length) {
+      finishRoom(room.id).then(onGameOverRef.current)
+    } else {
+      advanceQuestion(room.id, next)
+    }
+  }, [players])
 
   // Rebuild options when question changes
   useEffect(() => {
