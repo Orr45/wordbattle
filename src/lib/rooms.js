@@ -26,10 +26,10 @@ export async function getRoom(code) {
   return data
 }
 
-export async function startRoom(code, wordList) {
+export async function startRoom(code, wordList, gameMode = 'normal') {
   const { data, error } = await supabase
     .from('rooms')
-    .update({ status: 'playing', word_list: wordList, started_at: new Date().toISOString() })
+    .update({ status: 'playing', word_list: wordList, started_at: new Date().toISOString(), game_mode: gameMode })
     .eq('id', code)
     .select()
     .single()
