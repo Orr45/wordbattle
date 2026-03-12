@@ -71,3 +71,21 @@ export async function getPlayers(roomId) {
 export async function finishRoom(code) {
   await supabase.from('rooms').update({ status: 'finished' }).eq('id', code)
 }
+
+export async function rematchRoom(code) {
+  await supabase.from('rooms').update({
+    status: 'lobby', word_list: [], started_at: null,
+    current_question: 0, question_started_at: null,
+  }).eq('id', code)
+  const { data: players } = await supabase.from('players').select('id').eq('room_id', code)
+  for (const p of (players || [])) {
+    await supabase.from('players').update({ score: 0, answers: [], finished_at: null }).eq('id', p.id)
+  }
+}
+
+export async function advanceQuestion(code, nextIndex) {
+  await supabase.from('rooms').update({
+    current_question: nextIndex,
+    question_started_at: new Date().toISOString(),
+  }).eq('id', code)
+}

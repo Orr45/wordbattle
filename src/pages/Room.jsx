@@ -4,14 +4,36 @@ import { supabase } from '../lib/supabase'
 import { loadWords, pickRandom } from '../lib/words'
 import { getRoom, getPlayers, startRoom, updatePlayer, finishRoom } from '../lib/rooms'
 import QuestionCard from '../components/QuestionCard'
+import FirstToAnswer from './FirstToAnswer'
 import Leaderboard from './Leaderboard'
 
 const GAME_DURATION = 10 * 60
 
 const MODES = [
-  { id: 'normal',  icon: '🧠', label: 'רגיל',       sub: 'אנגלית → עברית' },
-  { id: 'reverse', icon: '🔄', label: 'הפוך',        sub: 'עברית → אנגלית' },
+  { id: 'normal',  icon: '🧠', label: 'רגיל',      sub: 'אנגלית → עברית' },
+  { id: 'reverse', icon: '🔄', label: 'הפוך',       sub: 'עברית → אנגלית' },
+  { id: 'first',   icon: '⚡', label: 'מי ראשון',   sub: '8 שניות לשאלה' },
 ]
+
+function LiveScoreboard({ players, myId }) {
+  const sorted = [...players].sort((a, b) => b.score - a.score)
+  return (
+    <div className="fixed top-4 left-4 z-50 bg-black/80 backdrop-blur border border-white/10 rounded-2xl p-3 min-w-36 animate-slide-up" dir="rtl">
+      <p className="text-xs text-white/40 uppercase tracking-wider mb-2">ניקוד חי</p>
+      <div className="space-y-1.5">
+        {sorted.map((p, i) => (
+          <div key={p.id} className={`flex items-center justify-between gap-3 text-sm ${p.id === myId ? 'text-purple-300 font-bold' : 'text-white/70'}`}>
+            <span className="flex items-center gap-1">
+              <span>{['🥇','🥈','🥉'][i] ?? `${i+1}.`}</span>
+              <span className="max-w-24 truncate">{p.nickname}</span>
+            </span>
+            <span className="text-yellow-400 font-mono text-xs">{p.score}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function Room() {
   const { code } = useParams()
@@ -25,6 +47,7 @@ export default function Room() {
   const [answers, setAnswers] = useState([])
   const [remaining, setRemaining] = useState(GAME_DURATION)
   const [gameOver, setGameOver] = useState(false)
+  const [showScoreboard, setShowScoreboard] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const timerRef = useRef(null)
@@ -44,7 +67,6 @@ export default function Room() {
         setRoom(r)
         const p = await getPlayers(code)
         setPlayers(p)
-
         if (r.status === 'playing') {
           setGameWords(r.word_list)
           const elapsed = (Date.now() - new Date(r.started_at).getTime()) / 1000
@@ -52,11 +74,8 @@ export default function Room() {
         } else if (r.status === 'finished') {
           setGameOver(true)
         }
-      } catch (e) {
-        setError('החדר לא נמצא')
-      } finally {
-        setLoading(false)
-      }
+      } catch { setError('החדר לא נמצא') }
+      finally { setLoading(false) }
     }
     load()
   }, [me, code])
@@ -73,6 +92,14 @@ export default function Room() {
           const elapsed = (Date.now() - new Date(r.started_at).getTime()) / 1000
           setRemaining(Math.max(0, GAME_DURATION - Math.floor(elapsed)))
         }
+        if (r.status === 'lobby') {
+          // Rematch happened
+          setGameWords([])
+          setAnswers([])
+          setQuestionIndex(0)
+          setGameOver(false)
+          scoreRef.current = 0
+        }
         if (r.status === 'finished') {
           clearInterval(timerRef.current)
           setGameOver(true)
@@ -86,8 +113,9 @@ export default function Room() {
     return () => { supabase.removeChannel(roomSub) }
   }, [me, code, gameWords.length])
 
+  // Global timer (not used for 'first' mode)
   useEffect(() => {
-    if (!room || room.status !== 'playing' || gameWords.length === 0) return
+    if (!room || room.status !== 'playing' || gameWords.length === 0 || room.game_mode === 'first') return
     clearInterval(timerRef.current)
     timerRef.current = setInterval(() => {
       setRemaining(prev => {
@@ -96,7 +124,7 @@ export default function Room() {
       })
     }, 1000)
     return () => clearInterval(timerRef.current)
-  }, [room?.status, gameWords.length])
+  }, [room?.status, gameWords.length, room?.game_mode])
 
   async function handleTimeUp() {
     if (me?.isHost) await finishRoom(code)
@@ -128,6 +156,7 @@ export default function Room() {
   const shareUrl = `${window.location.origin}/room/${code}`
   const gameMode = room?.game_mode || 'normal'
   const isReverse = gameMode === 'reverse'
+  const isFirstMode = gameMode === 'first'
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-white/50">טוען חדר...</div>
   if (error) return (
@@ -136,7 +165,22 @@ export default function Room() {
       <button onClick={() => navigate('/multiplayer')} className="px-6 py-2 bg-white/10 rounded-xl">חזור</button>
     </div>
   )
-  if (gameOver) return <Leaderboard players={players} myId={me?.id} onHome={() => navigate('/')} roomCode={code} />
+  if (gameOver) return (
+    <Leaderboard
+      players={players}
+      myId={me?.id}
+      isHost={me?.isHost}
+      roomCode={code}
+      onHome={() => navigate('/')}
+      onRematch={() => {
+        setGameOver(false)
+        setAnswers([])
+        setQuestionIndex(0)
+        scoreRef.current = 0
+        setGameWords([])
+      }}
+    />
+  )
 
   // Lobby
   if (!room || room.status === 'lobby') {
@@ -149,56 +193,46 @@ export default function Room() {
             <p className="text-white/50 text-sm">ממתין לשחקנים...</p>
           </div>
 
-          {/* Share */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
             <p className="text-xs text-white/40 mb-2 uppercase tracking-wider">שתף קישור</p>
             <div className="flex gap-2">
               <input readOnly value={shareUrl} className="flex-1 bg-white/10 rounded-xl px-3 py-2 text-sm font-mono text-white/70 outline-none" dir="ltr" />
-              <button onClick={() => navigator.clipboard.writeText(shareUrl)} className="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-sm transition-colors">
-                העתק
-              </button>
+              <button onClick={() => navigator.clipboard.writeText(shareUrl)} className="px-3 py-2 bg-purple-600 hover:bg-purple-500 rounded-xl text-sm transition-colors">העתק</button>
             </div>
             <p className="text-center text-2xl font-mono font-bold text-pink-400 mt-3">{code}</p>
           </div>
 
-          {/* Mode picker — host only */}
           {me?.isHost && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
               <p className="text-xs text-white/40 uppercase tracking-wider mb-3">בחר מצב משחק</p>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {MODES.map(m => (
                   <button
                     key={m.id}
                     onClick={() => setSelectedMode(m.id)}
-                    className={`py-3 px-3 rounded-xl flex flex-col items-center gap-1 border-2 transition-all ${
-                      selectedMode === m.id
-                        ? 'border-purple-500 bg-purple-500/20'
-                        : 'border-white/10 bg-white/5 hover:border-white/20'
-                    }`}
+                    className={`py-3 px-2 rounded-xl flex flex-col items-center gap-1 border-2 transition-all ${selectedMode === m.id ? 'border-purple-500 bg-purple-500/20' : 'border-white/10 bg-white/5 hover:border-white/20'}`}
                   >
                     <span className="text-xl">{m.icon}</span>
-                    <span className="text-sm font-bold">{m.label}</span>
-                    <span className="text-xs text-white/40">{m.sub}</span>
+                    <span className="text-xs font-bold">{m.label}</span>
+                    <span className="text-xs text-white/40 text-center leading-tight">{m.sub}</span>
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Non-host: show selected mode */}
           {!me?.isHost && (
             <div className="bg-white/5 border border-white/10 rounded-2xl p-3 mb-4 text-center text-white/50 text-sm">
               המארח יבחר את מצב המשחק
             </div>
           )}
 
-          {/* Players */}
           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
             <p className="text-xs text-white/40 uppercase tracking-wider mb-3">שחקנים ({players.length})</p>
             <div className="space-y-2">
               {players.map((p, i) => (
                 <div key={p.id} className="flex items-center gap-3">
-                  <span className="text-lg">{['🥇', '🥈', '🥉', '👤'][Math.min(i, 3)]}</span>
+                  <span className="text-lg">{['🥇','🥈','🥉','👤'][Math.min(i, 3)]}</span>
                   <span className={`font-medium ${p.id === me?.id ? 'text-purple-300' : 'text-white/80'}`}>
                     {p.nickname} {p.id === me?.id && <span className="text-xs text-white/40">(את/ה)</span>}
                   </span>
@@ -208,12 +242,8 @@ export default function Room() {
           </div>
 
           {me?.isHost ? (
-            <button
-              onClick={handleStart}
-              disabled={players.length < 1}
-              className="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-700 hover:from-pink-500 hover:to-rose-600 disabled:opacity-40 rounded-2xl font-bold text-lg transition-all hover:scale-105 active:scale-95"
-            >
-              התחל משחק ▶ ({MODES.find(m => m.id === selectedMode)?.label})
+            <button onClick={handleStart} disabled={players.length < 1} className="w-full py-4 bg-gradient-to-r from-pink-600 to-rose-700 hover:from-pink-500 hover:to-rose-600 disabled:opacity-40 rounded-2xl font-bold text-lg transition-all hover:scale-105 active:scale-95">
+              התחל {MODES.find(m => m.id === selectedMode)?.icon} {MODES.find(m => m.id === selectedMode)?.label} ▶
             </button>
           ) : (
             <div className="text-center text-white/40 text-sm py-4">ממתין למארח להתחיל...</div>
@@ -223,7 +253,29 @@ export default function Room() {
     )
   }
 
-  // Game
+  // Game — First To Answer mode
+  if (room.status === 'playing' && gameWords.length > 0 && isFirstMode) {
+    return (
+      <>
+        {showScoreboard && <LiveScoreboard players={players} myId={me?.id} />}
+        <button
+          onClick={() => setShowScoreboard(s => !s)}
+          className="fixed top-4 right-4 z-50 bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
+        >
+          {showScoreboard ? 'הסתר ניקוד' : '📊 ניקוד'}
+        </button>
+        <FirstToAnswer
+          gameWords={gameWords}
+          room={room}
+          me={me}
+          players={players}
+          onGameOver={() => setGameOver(true)}
+        />
+      </>
+    )
+  }
+
+  // Game — Normal / Reverse mode
   if (room.status === 'playing' && gameWords.length > 0) {
     if (answers.length >= gameWords.length) {
       return (
@@ -246,15 +298,24 @@ export default function Room() {
     }
 
     return (
-      <QuestionCard
-        words={gameWords[questionIndex]}
-        allWords={gameWords}
-        questionIndex={questionIndex}
-        totalQuestions={gameWords.length}
-        onAnswer={handleAnswer}
-        globalRemaining={remaining}
-        reverse={isReverse}
-      />
+      <>
+        {showScoreboard && <LiveScoreboard players={players} myId={me?.id} />}
+        <button
+          onClick={() => setShowScoreboard(s => !s)}
+          className="fixed top-4 right-4 z-50 bg-black/60 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white/50 hover:text-white transition-colors"
+        >
+          {showScoreboard ? 'הסתר ניקוד' : '📊 ניקוד'}
+        </button>
+        <QuestionCard
+          words={gameWords[questionIndex]}
+          allWords={gameWords}
+          questionIndex={questionIndex}
+          totalQuestions={gameWords.length}
+          onAnswer={handleAnswer}
+          globalRemaining={remaining}
+          reverse={isReverse}
+        />
+      </>
     )
   }
 
