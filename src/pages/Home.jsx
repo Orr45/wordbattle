@@ -15,21 +15,21 @@ export default function Home() {
   const canPlay = wordCount >= 4
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" dir="rtl">
       <div className="text-center mb-12 animate-slide-up">
         <div className="text-7xl mb-4">⚔️</div>
         <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
           WordBattle
         </h1>
-        <p className="text-white/60 text-lg">Master Hebrew vocabulary through battle</p>
+        <p className="text-white/60 text-lg">שלוט באוצר המילים באנגלית דרך קרב</p>
       </div>
 
       <div className="w-full max-w-sm space-y-4 animate-slide-up">
         {!canPlay && (
           <div className="bg-yellow-500/20 border border-yellow-500/40 rounded-xl p-4 text-center text-yellow-300 text-sm">
-            Add at least 4 words to start playing →{' '}
+            הוסף לפחות 4 מילים כדי להתחיל לשחק ←{' '}
             <button onClick={() => navigate('/settings')} className="underline font-semibold">
-              Settings
+              הגדרות
             </button>
           </div>
         )}
@@ -44,8 +44,8 @@ export default function Home() {
           }`}
         >
           <span className="text-2xl">🧠</span>
-          Solo Mode
-          {wordCount > 0 && <span className="text-sm font-normal opacity-70">({wordCount} words)</span>}
+          משחק יחיד
+          {wordCount > 0 && <span className="text-sm font-normal opacity-70">({wordCount} מילים)</span>}
         </button>
 
         <button
@@ -58,21 +58,21 @@ export default function Home() {
           }`}
         >
           <span className="text-2xl">⚔️</span>
-          Multiplayer
-          {!supabaseOk && <span className="text-xs font-normal opacity-50">(Supabase required)</span>}
+          מרובה משתתפים
+          {!supabaseOk && <span className="text-xs font-normal opacity-50">(נדרש Supabase)</span>}
         </button>
 
         <button
           onClick={() => navigate('/settings')}
           className="w-full py-3 rounded-2xl font-semibold text-white/70 border border-white/20 hover:border-white/40 hover:text-white transition-all"
         >
-          ⚙️ Manage Words
+          ⚙️ ניהול מילים
         </button>
       </div>
 
       {wordCount > 0 && (
         <p className="mt-8 text-white/30 text-sm">
-          {wordCount} word{wordCount !== 1 ? 's' : ''} ready
+          {wordCount} מילים מוכנות
         </p>
       )}
     </div>

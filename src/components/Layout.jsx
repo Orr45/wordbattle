@@ -17,13 +17,13 @@ export default function Layout({ children }) {
                 to="/"
                 className={`px-3 py-1 rounded-full transition-colors ${location.pathname === '/' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white'}`}
               >
-                Home
+                בית
               </Link>
               <Link
                 to="/settings"
                 className={`px-3 py-1 rounded-full transition-colors ${location.pathname === '/settings' ? 'bg-purple-600 text-white' : 'text-white/60 hover:text-white'}`}
               >
-                Words
+                מילים
               </Link>
             </nav>
           </div>
