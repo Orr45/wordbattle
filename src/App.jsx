@@ -10,6 +10,8 @@ import Flashcard from './pages/Flashcard'
 import MatchGame from './pages/MatchGame'
 import Multiplayer from './pages/Multiplayer'
 import Room from './pages/Room'
+import SentenceComplete from './pages/SentenceComplete'
+import Restate from './pages/Restate'
 import './index.css'
 
 export default function App() {
@@ -27,6 +29,8 @@ export default function App() {
           <Route path="/match" element={<MatchGame />} />
           <Route path="/multiplayer" element={<Multiplayer />} />
           <Route path="/room/:code" element={<Room />} />
+          <Route path="/sentence-complete" element={<SentenceComplete />} />
+          <Route path="/restate" element={<Restate />} />
         </Routes>
       </Layout>
     </BrowserRouter>

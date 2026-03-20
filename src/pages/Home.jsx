@@ -21,6 +21,8 @@ export default function Home() {
     { icon: '🃏', label: 'כרטיסיות', sub: 'הפוך וזכור', path: '/flashcard', color: 'from-teal-600 to-teal-800 hover:from-teal-500 hover:to-teal-700 shadow-teal-900/50' },
     { icon: '🧩', label: 'משחק התאמה', sub: 'מצא את הזוגות', path: '/match', color: 'from-orange-600 to-orange-800 hover:from-orange-500 hover:to-orange-700 shadow-orange-900/50' },
     { icon: '📉', label: 'מילים חלשות', sub: 'תרגל את הקשות', path: '/weak', color: 'from-red-600 to-red-800 hover:from-red-500 hover:to-red-700 shadow-red-900/50' },
+    { icon: '📝', label: 'השלמת משפטים', sub: 'מלא את החסר', path: '/sentence-complete', color: 'from-emerald-600 to-emerald-800 hover:from-emerald-500 hover:to-emerald-700 shadow-emerald-900/50' },
+    { icon: '🔁', label: 'ניסוח מחדש', sub: 'בחר את המשמעות', path: '/restate', color: 'from-amber-600 to-amber-800 hover:from-amber-500 hover:to-amber-700 shadow-amber-900/50' },
   ]
 
   return (
